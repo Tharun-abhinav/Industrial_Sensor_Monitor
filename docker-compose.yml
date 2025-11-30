@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  # Main application service
+  sensor-monitor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: industrial-sensor-monitor
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist database
+      - ./sensor_data.db:/app/sensor_data.db
+      # Persist logs
+      - ./logs:/app/logs
+      # Persist failed measurements
+      - ./backend:/app/backend
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - sensor-network
+
+networks:
+  sensor-network:
+    driver: bridge
