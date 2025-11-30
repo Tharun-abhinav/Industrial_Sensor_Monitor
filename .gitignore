@@ -74,3 +74,11 @@ assets/
 
 # Failed operations queue
 failed_measurements.jsonl
+
+# Docker files
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Project knowledge
+PROJECT_KNOWLEDGE.md

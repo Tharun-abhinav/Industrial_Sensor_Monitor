@@ -44,61 +44,124 @@ This system consists of the following components:
 
 ### Prerequisites
 
-- Python 3.8 or higher
-- pip (Python package manager)
+- **Python 3.9+** (recommended: 3.9, 3.10, 3.11)
+  - **Note**: Python 3.13 is NOT recommended due to NumPy compatibility issues
+- **Git** (for cloning the repository)
+- **pip** (Python package manager)
 
-### Installation
+### 1️⃣ Set Up Environment
 
-1. **Navigate to the project directory**:
-   ```powershell
-   cd C:\industrial-sensor-monitor
-   ```
+**Clone the repository:**
+```bash
+git clone https://github.com/prathyushapeddi25/INDUSTRIAL-SENSOR-MONITOR.git
+cd INDUSTRIAL-SENSOR-MONITOR
+```
 
-2. **Install dependencies**:
-   ```powershell
-   pip install -r requirements.txt
-   ```
+**Create and activate virtual environment:**
+```bash
+# Create virtual environment
+python3.9 -m venv .venv
 
-### Running the System
+# Activate it (macOS/Linux)
+source .venv/bin/activate
 
-You need to run two services in separate terminal windows:
+# On Windows, use:
+# .venv\Scripts\activate
+```
 
-#### Terminal 1: Start the API Server
+**Install dependencies:**
+```bash
+pip install -r requirements.txt
+```
 
-```powershell
-cd C:\industrial-sensor-monitor\backend
+**Verify installation:**
+```bash
+pip list
+# Should show: fastapi, uvicorn, sqlalchemy, pydantic, numpy, requests
+```
+
+---
+
+### 2️⃣ Start the System
+
+**Option A: Automated Startup (Recommended) - macOS/Linux**
+
+Run the startup script that handles everything:
+```bash
+chmod +x start.sh  # Make executable (first time only)
+./start.sh
+```
+
+This will:
+1. Activate the virtual environment
+2. Start the API server on `http://localhost:8000`
+3. Start the data simulator (ingestion service)
+4. Display process IDs and log file locations
+
+**Option B: Manual Startup**
+
+If you prefer to run components separately:
+
+**Terminal 1 - Start Backend API:**
+```bash
+source .venv/bin/activate
+cd backend
 python api.py
 ```
 
 The API will start on `http://localhost:8000`
-
 - API Documentation: `http://localhost:8000/docs`
 - Dashboard: `http://localhost:8000/dashboard`
 
-#### Terminal 2: Start the Data Ingestion Service
-
-```powershell
-cd C:\industrial-sensor-monitor\backend
+**Terminal 2 - Start Data Simulator:**
+```bash
+source .venv/bin/activate
+cd backend
 python ingestion_service.py
 ```
 
 This will:
-1. Start generating simulated sensor readings once per second
+1. Generate simulated sensor readings once per second
 2. Push data to the ingestion API
 3. Automatically detect and flag anomalies
+4. Display ingestion statistics in real-time
 
-### Accessing the Dashboard
+---
 
-Open your browser and navigate to:
+### 3️⃣ Access the Frontend
+
+Once the services are running:
+
+1. **Open your web browser**
+2. **Navigate to:** `http://localhost:8000/dashboard`
+3. **The dashboard will display:**
+   - Real-time sensor readings (auto-refreshes every 5 seconds)
+   - Three charts for: Fermenter Temperature, pH Level, Agitator RPM
+   - Anomaly indicators (red triangles on charts)
+   - Statistics panel showing total measurements and anomaly count
+   - List of recent anomalies with timestamps
+
+---
+
+### 4️⃣ Verify Everything is Working
+
+**Check API Health:**
+```bash
+curl http://localhost:8000/health
 ```
-http://localhost:8000/dashboard
-```
 
-The dashboard shows:
-- System statistics (total tags, measurements, anomalies)
-- Time-series chart of sensor readings
-- Anomaly highlights on the chart (red triangles)
-- List of recent anomalies with details
+**View API Documentation:**
+- Open `http://localhost:8000/docs` in your browser
+- Interactive Swagger UI for testing endpoints
+
+**Check Logs:**
+```bash
+# API server logs
+tail -f api.log
+
+# Data simulator logs
+tail -f ingestion.log
+```
 
 ## 📊 Simulated Sensors
 
@@ -195,16 +258,21 @@ Full API documentation available at: `http://localhost:8000/docs`
 ## 🧪 Testing Components Individually
 
 ### Test the Simulator
-```powershell
-cd C:\industrial-sensor-monitor\backend
-python simulator.py
+```bash
+source .venv/bin/activate
+python backend/simulator.py
 ```
 
 ### Test the Anomaly Detector
-```powershell
-cd C:\industrial-sensor-monitor\backend
-python anomaly_detector.py
+```bash
+source .venv/bin/activate
+python backend/anomaly_detector.py
 ```
+
+Output will show:
+- Normal readings being processed
+- Threshold anomalies detected (e.g., temp > 45°C)
+- Statistical anomalies detected (unusual patterns)
 
 ## 📁 Project Structure
 
@@ -252,41 +320,136 @@ CREATE INDEX idx_timestamp ON measurements(timestamp);
 - **Frontend**: HTML, CSS, JavaScript, Chart.js
 - **API**: RESTful with automatic OpenAPI documentation
 
-## 🎯 Design Decisions
+## 🎯 Design Decisions & Architecture
 
 1. **Simple Schema**: Single `measurements` table with `is_anomaly` boolean field
+   - Anomaly flag stored directly in each record (no separate table needed)
+   - Enables efficient querying of anomalies with indexed columns
 2. **FastAPI**: Chosen for automatic API documentation and type validation
 3. **SQLite**: Simple, embedded database - no setup required
 4. **Anomaly Detection**: 
-   - Rolling mean ± 3σ (statistical approach)
-   - Simple threshold rules (e.g., temp > 45°C)
-   - Separated into dedicated `anomaly_detector.py` module
+   - **Clearly separated** into dedicated `anomaly_detector.py` module
+   - **Dual-method approach**:
+     - **Method 1**: Threshold rules (e.g., fermenter_temp: 35-45°C)
+     - **Method 2**: Rolling mean ± 3σ (statistical outlier detection)
+   - Anomaly flagged if **EITHER** method detects it
+   - Maintains 50-reading sliding window per sensor
 5. **Push-based Ingestion**: Simulator pushes data to API endpoint
 6. **Single-page Dashboard**: Simple HTML/JS with Chart.js for visualization
 7. **Clear Separation**: Simulator, ingestion, storage, analytics, and presentation are separate modules
+8. **Fault Tolerance**: 
+   - Failed DB operations queued in memory + persisted to `.jsonl` file
+   - Background retry worker attempts up to 3 retries
+   - Original timestamps preserved during recovery
 
-## 🔄 Stopping the System
+## 🛑 Stopping the System
 
+**If using start.sh:**
+The script will display process IDs (PIDs) when starting. To stop:
+```bash
+kill <API_PID> <SIMULATOR_PID>
+```
+
+Example:
+```bash
+kill 19807 19845
+```
+
+**If running manually:**
 Press `Ctrl+C` in each terminal window to stop the services.
+
+## 📋 Assumptions & Shortcuts
+
+### Assumptions Made:
+1. **Single Server Deployment**: System runs on localhost, not designed for distributed setup
+2. **SQLite Database**: Sufficient for demo; production would use PostgreSQL/MySQL
+3. **In-Memory History**: Anomaly detector loses rolling statistics on restart (not persisted)
+4. **No Authentication**: API endpoints are open (would need auth in production)
+5. **Fixed Sensor Tags**: Three predefined tags (extensible but hardcoded in validation)
+6. **UTC Timestamps**: All times stored and displayed in UTC
+
+### Shortcuts Taken:
+1. **Simulated Data**: `ingestion_service.py` generates synthetic sensor readings instead of real hardware integration
+2. **Simple Retry Logic**: Max 3 retries with fixed 5-second intervals (production would use exponential backoff)
+3. **Limited Dashboard**: Basic visualization only; no advanced features like:
+   - Historical playback controls
+   - Email/SMS alert notifications
+   - User authentication or preferences
+   - Mobile-responsive design
+4. **No Unit Tests**: Time constraint (production would have comprehensive test suite)
+5. **Basic Error Handling**: Minimal validation and user-friendly error messages
+6. **Single File Logs**: Production would use proper log rotation and centralized logging
+7. **No Data Aggregation**: Dashboard shows raw data (production would downsample for long time ranges)
+
+### Known Limitations:
+- Dashboard doesn't handle very large datasets efficiently (only shows last 100 points)
+- No concurrent request handling optimization
+- Anomaly detector state is not persisted across restarts
+- Frontend uses polling (5s interval) instead of WebSockets for real-time updates
+- No data backup or export functionality
+- Retry queue size grows unbounded if database is down for extended period
+
+---
 
 ## 📝 Notes
 
-- The database file `sensor_data.db` is created automatically in the backend directory
-- Anomaly detection becomes more accurate as more data is collected (needs ~10 readings minimum)
+- The database file `sensor_data.db` is created automatically in the root directory on first run
+- Anomaly detection becomes more accurate as more data is collected (needs ~10 readings minimum for statistical method)
 - The system is designed for clarity and ease of understanding, not production-scale performance
 - All timestamps are in UTC
 - Data is generated once per second as specified in requirements
+- Failed measurements are stored in `backend/failed_measurements.jsonl` and automatically recovered on restart
+
+## 🔧 Troubleshooting
+
+**Port 8000 already in use:**
+```bash
+# Find and kill the process (macOS/Linux)
+lsof -ti:8000 | xargs kill -9
+
+# On Windows:
+# netstat -ano | findstr :8000
+# taskkill /PID <PID> /F
+```
+
+**Database locked errors:**
+```bash
+# Remove database and restart
+rm sensor_data.db
+./start.sh
+```
+
+**Import errors / ModuleNotFoundError:**
+```bash
+# Ensure virtual environment is activated
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+**Dashboard not loading:**
+- Verify API server is running: `curl http://localhost:8000/health`
+- Check browser console for errors (F12 → Console tab)
+- Ensure CORS is enabled in `api.py` (already configured)
+
+**NumPy installation fails:**
+- Use Python 3.9, 3.10, or 3.11 (NOT 3.13)
+- If issues persist, try: `pip install --upgrade pip setuptools wheel`
+
+---
 
 ## 🚀 Future Enhancements
 
 Possible improvements for a production system:
-- Switch to PostgreSQL for better concurrency
-- Add authentication and authorization
-- Implement more sophisticated ML-based anomaly detection
-- Add alert notifications (email/SMS)
-- Containerization with Docker
-- Horizontal scaling with load balancer
+- Switch to PostgreSQL for better concurrency and performance
+- Add authentication and authorization (OAuth2/JWT)
+- Implement more sophisticated ML-based anomaly detection (Isolation Forest, LSTM)
+- Add real-time alert notifications (email/SMS/Slack)
+- Containerization with Docker and Docker Compose
+- Horizontal scaling with load balancer and distributed queue (Redis/RabbitMQ)
 - Time-series optimized database (InfluxDB/TimescaleDB)
+- WebSocket support for real-time dashboard updates
+- Comprehensive unit and integration tests (pytest)
+- CI/CD pipeline with automated testing and deployment
 
 ## 📄 License
 

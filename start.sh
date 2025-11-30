@@ -13,10 +13,11 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
-echo "[1/3] Installing dependencies..."
-pip install -r requirements.txt
+echo "[1/3] Activating virtual environment..."
+source .venv/bin/activate
 if [ $? -ne 0 ]; then
-    echo "ERROR: Failed to install dependencies"
+    echo "ERROR: Failed to activate virtual environment"
+    echo "Run: python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt"
     exit 1
 fi
 
@@ -29,7 +30,7 @@ echo ""
 cd backend
 
 # Start API server in background
-python3 api.py > ../api.log 2>&1 &
+python api.py > ../api.log 2>&1 &
 API_PID=$!
 echo "API Server started (PID: $API_PID)"
 
@@ -39,7 +40,7 @@ echo "[3/3] Starting Data Ingestion Service..."
 echo ""
 
 # Start ingestion service in background
-python3 ingestion_service.py > ../ingestion.log 2>&1 &
+python ingestion_service.py > ../ingestion.log 2>&1 &
 INGESTION_PID=$!
 echo "Ingestion Service started (PID: $INGESTION_PID)"
 
